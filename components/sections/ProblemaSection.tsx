@@ -1,5 +1,3 @@
-"use client";
-
 import { XCircle } from "lucide-react";
 
 const problemas = [

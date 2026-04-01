@@ -1,5 +1,3 @@
-"use client";
-
 const metricas = [
   { valor: "3x",   label: "aumento médio na taxa de conversão de leads para vendas" },
   { valor: "67%",  label: "redução no tempo de qualificação com automações e IA" },

@@ -1,5 +1,3 @@
-"use client";
-
 import { Search, GitBranch, TrendingUp } from "lucide-react";
 
 const etapas = [

@@ -1,5 +1,3 @@
-"use client";
-
 import { ArrowRight, Calendar } from "lucide-react";
 
 export default function CTASection() {

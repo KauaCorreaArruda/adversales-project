@@ -1,5 +1,3 @@
-"use client";
-
 import { Crosshair, Zap, Bot } from "lucide-react";
 
 const pilares = [

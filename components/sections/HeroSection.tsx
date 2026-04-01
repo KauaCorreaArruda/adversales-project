@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -61,6 +61,7 @@ export default function HeroSection() {
     composer: EffectComposer | null;
     stars: THREE.Points[];
     nebula: THREE.Mesh | null;
+    atm: THREE.Mesh | null;
     mountains: THREE.Mesh[];
     animationId: number | null;
     targetCameraX?: number;
@@ -69,12 +70,23 @@ export default function HeroSection() {
     locations?: number[];
   }>({
     scene: null, camera: null, renderer: null, composer: null,
-    stars: [], nebula: null, mountains: [], animationId: null,
+    stars: [], nebula: null, atm: null, mountains: [], animationId: null,
   });
+
+  const titleRefs = useMemo(
+    () => [title0Ref, title1Ref, title2Ref],
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const subRefs = useMemo(
+    () => [sub0Ref, sub1Ref, sub2Ref],
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // ─── THREE.JS INIT ───────────────────────────────────────────────────────────
   useEffect(() => {
     const { current: refs } = threeRefs;
+
+    try {
 
     refs.scene = new THREE.Scene();
     refs.scene.fog = new THREE.FogExp2(0x000000, 0.00025);
@@ -219,7 +231,8 @@ export default function HeroSection() {
         }`,
       side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true,
     });
-    refs.scene!.add(new THREE.Mesh(atmGeo, atmMat));
+    refs.atm = new THREE.Mesh(atmGeo, atmMat);
+    refs.scene!.add(refs.atm);
 
     // Store initial mountain z positions
     refs.locations = refs.mountains.map(m => m.position.z);
@@ -230,11 +243,16 @@ export default function HeroSection() {
       const t = Date.now() * 0.001;
       refs.stars.forEach(s => { (s.material as THREE.ShaderMaterial).uniforms.time.value = t; });
       if (refs.nebula) (refs.nebula.material as THREE.ShaderMaterial).uniforms.time.value = t * 0.5;
-      if (refs.camera && refs.targetCameraX !== undefined) {
+      if (
+        refs.camera &&
+        refs.targetCameraX !== undefined &&
+        refs.targetCameraY !== undefined &&
+        refs.targetCameraZ !== undefined
+      ) {
         const s = 0.05;
-        smoothCameraPos.current.x += (refs.targetCameraX  - smoothCameraPos.current.x) * s;
-        smoothCameraPos.current.y += (refs.targetCameraY! - smoothCameraPos.current.y) * s;
-        smoothCameraPos.current.z += (refs.targetCameraZ! - smoothCameraPos.current.z) * s;
+        smoothCameraPos.current.x += (refs.targetCameraX - smoothCameraPos.current.x) * s;
+        smoothCameraPos.current.y += (refs.targetCameraY - smoothCameraPos.current.y) * s;
+        smoothCameraPos.current.z += (refs.targetCameraZ - smoothCameraPos.current.z) * s;
         refs.camera.position.set(
           smoothCameraPos.current.x + Math.sin(t*0.1)*2,
           smoothCameraPos.current.y + Math.cos(t*0.15)*1,
@@ -247,10 +265,15 @@ export default function HeroSection() {
         m.position.x = Math.sin(t*0.1)*2*pf;
         m.position.y = 50 + Math.cos(t*0.15)*pf;
       });
-      refs.composer!.render();
+      refs.composer?.render();
     };
     animate();
-    setIsReady(true);
+
+    } catch (e) {
+      console.error("[HeroSection] Three.js init error:", e);
+    } finally {
+      setIsReady(true);
+    }
 
     const onResize = () => {
       if (!refs.camera || !refs.renderer || !refs.composer) return;
@@ -263,20 +286,25 @@ export default function HeroSection() {
 
     return () => {
       if (refs.animationId) cancelAnimationFrame(refs.animationId);
+      refs.animationId = null;
       window.removeEventListener("resize", onResize);
       refs.stars.forEach(s => { s.geometry.dispose(); (s.material as THREE.Material).dispose(); });
+      refs.stars = [];
       refs.mountains.forEach(m => { m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
-      if (refs.nebula) { refs.nebula.geometry.dispose(); (refs.nebula.material as THREE.Material).dispose(); }
-      if (refs.renderer) refs.renderer.dispose();
+      refs.mountains = [];
+      refs.locations = [];
+      if (refs.nebula) { refs.nebula.geometry.dispose(); (refs.nebula.material as THREE.Material).dispose(); refs.nebula = null; }
+      if (refs.atm) { refs.atm.geometry.dispose(); (refs.atm.material as THREE.Material).dispose(); refs.atm = null; }
+      if (refs.renderer) { refs.renderer.dispose(); refs.renderer = null; }
+      refs.scene = null;
+      refs.camera = null;
+      refs.composer = null;
     };
   }, []);
 
   // ─── GSAP ENTRANCE (phase 0 — ADVERSALES) ────────────────────────────────────
   useEffect(() => {
     if (!isReady) return;
-
-    const titleRefs = [title0Ref, title1Ref, title2Ref];
-    const subRefs   = [sub0Ref,   sub1Ref,   sub2Ref];
 
     // Show phase-0 elements, hide phases 1+2
     gsap.set([menuRef.current, title0Ref.current, sub0Ref.current,
@@ -312,9 +340,6 @@ export default function HeroSection() {
 
   // ─── SCROLL HANDLER ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const titleRefs = [title0Ref, title1Ref, title2Ref];
-    const subRefs   = [sub0Ref,   sub1Ref,   sub2Ref];
-
     const transitionPhase = (prevPhase: number, nextPhase: number) => {
       // Animate OUT previous title + subtitle
       if (prevPhase >= 0) {
@@ -323,12 +348,12 @@ export default function HeroSection() {
         if (prevTitle) {
           gsap.killTweensOf(prevTitle.querySelectorAll(".title-char"));
           gsap.to(prevTitle.querySelectorAll(".title-char"), { y: -80, opacity: 0, duration: 0.4, stagger: 0.02, ease: "power3.in",
-            onComplete: () => gsap.set(prevTitle, { visibility: "hidden" }) });
+            onComplete: () => { gsap.set(prevTitle, { visibility: "hidden" }); } });
         }
         if (prevSub) {
           gsap.killTweensOf(prevSub.querySelectorAll(".subtitle-line"));
           gsap.to(prevSub.querySelectorAll(".subtitle-line"), { y: -30, opacity: 0, duration: 0.3, stagger: 0.1, ease: "power2.in",
-            onComplete: () => gsap.set(prevSub, { visibility: "hidden" }) });
+            onComplete: () => { gsap.set(prevSub, { visibility: "hidden" }); } });
         }
       }
 
@@ -353,7 +378,7 @@ export default function HeroSection() {
         gsap.killTweensOf(flashRef.current);
         gsap.fromTo(flashRef.current, { opacity: 0 }, {
           opacity: 0.85, duration: 0.12, ease: "power2.in",
-          onComplete: () => gsap.to(flashRef.current!, { opacity: 0, duration: 0.55, ease: "power2.out" }),
+          onComplete: () => { gsap.to(flashRef.current!, { opacity: 0, duration: 0.55, ease: "power2.out" }); },
         });
       }
     };
